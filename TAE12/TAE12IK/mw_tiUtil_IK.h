@@ -34,7 +34,10 @@ public:
 		std::vector<int> gV_EEints; //target positions std vector
 		std::vector<float> gV_weight; // target weight
 		std::vector<gVec3> gV_EEs; //target positions std vector
-		std::vector<gVec3> gV_EEtarNs; //target positions std vector
+		std::vector<gVec3> gV_EEtarNs; //target normals std vector
+
+		std::vector<int> gV_EEints_Dirs; // target link indices
+		std::vector<gVec3> gV_EEtarDirs; // target link direction std vector
 	};
 	sEEBox sR_ArmDesiredEE; sEEBox sL_ArmDesiredEE;
 	sEEBox sR_LegDesiredEE; sEEBox sL_LegDesiredEE;
@@ -387,6 +390,7 @@ public:
 	}
 
 	void TrunkIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * EEBox, bCharacter * src);
+	void TrunkIK_withDir(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * EEBox, bCharacter * src);
 	void rightLegIK(mw_tiUtil_CHAIN::sBodyChain* chain, mw_tiUtil_CHAIN::sEEBox* EEBox, bCharacter * src);
 	void leftLegIK(mw_tiUtil_CHAIN::sBodyChain* chain, mw_tiUtil_CHAIN::sEEBox* EEBox, bCharacter * src);
 	void rightArmIK(mw_tiUtil_CHAIN::sBodyChain* chain, mw_tiUtil_CHAIN::sEEBox* EEBox, bCharacter * src);
@@ -394,6 +398,9 @@ public:
 
 	void doChainIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * desEE, float refPosWeight,
 		gVec3 desPos, float posWeight, gVec3 desRotX, gVec3 desRotY, float dirWeight);
+	void doChainIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * desEE, 
+		float refPosWeight, gVec3 desPos, float posWeight, gVec3 desRotX, gVec3 desRotY, float dirWeight,
+		std::vector<gVec3> desDirs, std::vector<int> desDirs_indices, float linkDirWeight);
 
 
 	struct iterViewInfo{

@@ -149,7 +149,6 @@ void objFuncRightLimIK(double *p, double *hx, int m, int n, void *adata) {
 		hx[cnt++] = (del_rY.x()) * pt->sR_LegDesiredEE.gV_weight[1];
 		hx[cnt++] = (del_rY.y()) * pt->sR_LegDesiredEE.gV_weight[1];
 		hx[cnt++] = (del_rY.z()) * pt->sR_LegDesiredEE.gV_weight[1];
-
 	}
 
 	if (cnt != n)
@@ -319,7 +318,59 @@ void objFuncTrunkLimIK_Furniture(double *p, double *hx, int m, int n, void *adat
 		std::cout << " error measurement vector size " << std::endl;
 	return;
 }
+void objFuncTrunkLimIK_Furniture_withDir(double *p, double *hx, int m, int n, void *adata) {
+	mw_tiUtil_CHAIN* pt = (mw_tiUtil_CHAIN*)adata;
+	int cnt = 0;
 
+	// p -> set joint matrix
+
+	pt->setTrunkLimCompactCoordArray(&pt->sT_TrunkChain, pt->character, p);
+	pt->character->updateKinematicsUptoPos();
+	pt->character->updateKinematicBodiesOfCharacterSim();
+	//cout << " " << p[0] << " " << p[1] << " " << p[2] << " " << pt->source_jointpose[ankle].GetPosition() << " " << pt->joint_world_matrix[0].get_row3(3) << endl;
+
+	for (int i = 0; i < m; i++) {
+		hx[cnt++] = (p[i] - pt->sT_TrunkChain.lca_srccoord[i]) * pt->sT_TrkDesiredEE.gV_weight[2];
+	}
+	for (int des_i = 0; des_i < pt->sT_TrkDesiredEE.gV_EEs.size(); des_i++) {
+		int j_idx = pt->sT_TrkDesiredEE.gV_EEints[des_i];
+		gXMat j_frame = pt->character->link(j_idx)->frame();
+
+		//position
+		gVec3 del = pt->sT_TrkDesiredEE.gV_EEs[des_i] - j_frame.trn();
+
+		hx[cnt++] = (del.x()) * pt->sT_TrkDesiredEE.gV_weight[0];
+		hx[cnt++] = (del.y()) * pt->sT_TrkDesiredEE.gV_weight[0];
+		hx[cnt++] = (del.z()) * pt->sT_TrkDesiredEE.gV_weight[0];
+
+		gVec3 del_rX = pt->sT_TrkDesiredEE.gV_EEtarNs[0] - j_frame.rotZ();
+		hx[cnt++] = (del_rX.x()) * pt->sT_TrkDesiredEE.gV_weight[1];
+		hx[cnt++] = (del_rX.y()) * pt->sT_TrkDesiredEE.gV_weight[1];
+		hx[cnt++] = (del_rX.z()) * pt->sT_TrkDesiredEE.gV_weight[1];
+
+		gVec3 del_rY = pt->sT_TrkDesiredEE.gV_EEtarNs[1] - j_frame.rotY();
+		hx[cnt++] = (del_rY.x()) * pt->sT_TrkDesiredEE.gV_weight[1];
+		hx[cnt++] = (del_rY.y()) * pt->sT_TrkDesiredEE.gV_weight[1];
+		hx[cnt++] = (del_rY.z()) * pt->sT_TrkDesiredEE.gV_weight[1];
+
+	}
+
+	for (int des_i = 0; des_i < pt->sT_TrkDesiredEE.gV_EEtarDirs.size(); des_i++) {
+		int joint_idx = pt->sT_TrkDesiredEE.gV_EEints_Dirs[des_i];
+		gVec3 dir_joint = pt->character->link(joint_idx)->frame().rotY();
+		gVec3 dir_Desired = pt->sT_TrkDesiredEE.gV_EEtarDirs[des_i];
+
+		gVec3 del_dir = dir_Desired - dir_joint;
+		hx[cnt++] = (del_dir.x()) * pt->sT_TrkDesiredEE.gV_weight[2];
+		hx[cnt++] = (del_dir.y()) * pt->sT_TrkDesiredEE.gV_weight[2];
+		hx[cnt++] = (del_dir.z()) * pt->sT_TrkDesiredEE.gV_weight[2];
+
+	}
+
+	if (cnt != n)
+		std::cout << " error measurement vector size " << std::endl;
+	return;
+}
 void mw_tiUtil_CHAIN::rightLegIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * EEBox, bCharacter * src)
 {
 	int m = chain->size - 1; // joint number
@@ -475,6 +526,44 @@ void mw_tiUtil_CHAIN::doChainIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_C
 		leftLegIK(chain, desEE, character);
 }
 
+void mw_tiUtil_CHAIN::doChainIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * desEE, float refPosWeight, 
+	gVec3 desPos, float posWeight, 
+	gVec3 desRotX, gVec3 desRotY, float dirWeight, 
+	std::vector<gVec3> desDirs, std::vector<int> desDirs_indices, float linkDirWeight)
+{
+	//pos
+	std::vector<gVec3> points; std::vector<gVec3> normls; std::vector<int> joint_indices; std::vector<float> weights;
+	int ee_jointidx = chain->JointIndexs.size() - 1;
+	ee_jointidx = chain->JointIndexs[ee_jointidx];
+	points.push_back(desPos); joint_indices.push_back(ee_jointidx); weights.push_back(posWeight);
+
+	//dir
+	gVec3 normX = desRotX;  normls.push_back(normX); gVec3 normY = desRotY;  normls.push_back(normY);
+	weights.push_back(dirWeight);
+
+	//reference
+	weights.push_back(refPosWeight);
+
+	//update EEBox
+	desEE->gV_EEs = points; desEE->gV_EEtarNs = normls;
+	desEE->gV_EEints = joint_indices; desEE->gV_weight = weights;
+
+	//link dir
+	weights.push_back(linkDirWeight);
+	desEE->gV_EEints_Dirs = desDirs_indices; desEE->gV_EEtarDirs = desDirs;
+
+	if (chain->chain_name_idx == 0)
+		TrunkIK_withDir(chain, desEE, character);
+	if (chain->chain_name_idx == 1)
+		rightArmIK(chain, desEE, character);
+	if (chain->chain_name_idx == 2)
+		leftArmIK(chain, desEE, character);
+	if (chain->chain_name_idx == 3)
+		rightLegIK(chain, desEE, character);
+	if (chain->chain_name_idx == 4)
+		leftLegIK(chain, desEE, character);
+}
+
 void mw_tiUtil_CHAIN::TrunkIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * EEBox, bCharacter * src)
 {
 	int m = chain->size - 2; // joint number - base orientation
@@ -492,6 +581,31 @@ void mw_tiUtil_CHAIN::TrunkIK(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHA
 	////////ik function
 	int sz = dof + EEBox->gV_EEs.size() * 3 + EEBox->gV_EEtarNs.size() * 3;// _iter_ViewFieldInfo->p_ends.size(); // dof:source pose, EEposition EEBox->gV_EEs.size() * 3
 	dlevmar_dif(objFuncTrunkLimIK_Furniture, chain->lca_precoord, NULL, dof, sz, 100, LevMarOpts, LevMarInfo, NULL, NULL, this);
+	printf("nIter=%d, reason=%d, e=%g to %g\n", int(LevMarInfo[5]), int(LevMarInfo[6]), LevMarInfo[0], LevMarInfo[1]);
+
+	setTrunkLimCompactCoordArray(&sT_TrunkChain, character, chain->lca_precoord);
+
+	character->updateKinematicsUptoPos();
+	character->updateKinematicBodiesOfCharacterSim();
+}
+
+void mw_tiUtil_CHAIN::TrunkIK_withDir(mw_tiUtil_CHAIN::sBodyChain * chain, mw_tiUtil_CHAIN::sEEBox * EEBox, bCharacter * src)
+{
+	int m = chain->size - 2; // joint number - base orientation
+	int dof = m * 3;
+	//chain->lca_srccoord = getTrunkLimCompactCoordArray();
+
+	//for(int i =0; i < dof; i++)
+	//std::cout << " trunk coord " << lca_tr_srccoord[i] << std::endl;
+	//lca_tr_base = character->link(0)->frame().trn();
+
+	if (chain->b_first == true) {
+		chain->lca_precoord = chain->lca_srccoord; // 미리 할당되어져야한다.
+		chain->b_first = false; // 미리 할당되어져야한다.
+	}
+	////////ik function
+	int sz = dof + EEBox->gV_EEs.size() * 3 + EEBox->gV_EEtarNs.size() * 3 + EEBox->gV_EEtarDirs.size() * 3;// _iter_ViewFieldInfo->p_ends.size(); // dof:source pose, EEposition EEBox->gV_EEs.size() * 3
+	dlevmar_dif(objFuncTrunkLimIK_Furniture_withDir, chain->lca_precoord, NULL, dof, sz, 100, LevMarOpts, LevMarInfo, NULL, NULL, this);
 	printf("nIter=%d, reason=%d, e=%g to %g\n", int(LevMarInfo[5]), int(LevMarInfo[6]), LevMarInfo[0], LevMarInfo[1]);
 
 	setTrunkLimCompactCoordArray(&sT_TrunkChain, character, chain->lca_precoord);
